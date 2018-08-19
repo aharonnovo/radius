@@ -899,144 +899,12 @@ func subType(parentIdent string, name string) string {
 	return strings.Join([]string{subIdentifier(parentIdent, name), `Type`}, `_`)
 }
 
-func genNewTLVObject(w io.Writer, attr *dictionary.Attribute) {
-	ident := identifier(attr.Name)
-	p(w)
-	if !attr.HasTag() {
-		p(w, `func new`, ident, `(value `, ident, `) (attribute radius.Attribute, err error) {`)
-	} else {
-		p(w, `func new`, ident, `(tag byte, value `, ident, `) (attribute radius.Attribute, err error) {`)
-	}
-	p(w, `  var typedAttributes []radius.TypedAttribute`)
-	p(w, `  var a radius.Attribute`)
-
-	for _, subAttr := range attr.Attributes {
-		p(w)
-		switch subAttr.Type {
-		case dictionary.AttributeString:
-			p(w, `  a, err = radius.NewString(value.`, identifier(subAttr.Name), `)`)
-		case dictionary.AttributeOctets:
-			p(w, `  a, err = radius.NewBytes(value.`, identifier(subAttr.Name), `)`)
-		case dictionary.AttributeIPAddr:
-			p(w, `  a, err = radius.NewIPAddr(value.`, identifier(subAttr.Name), `)`)
-		case dictionary.AttributeDate:
-			p(w, `  a, err = radius.NewDate(value.`, identifier(subAttr.Name), `)`)
-		case dictionary.AttributeInteger:
-			p(w, `  a = radius.NewInteger(value.`, identifier(subAttr.Name), `)`)
-		case dictionary.AttributeIPv6Addr:
-			p(w, `  a, err = radius.NewIPv6Addr(value.`, identifier(subAttr.Name), `)`)
-		case dictionary.AttributeIFID:
-			p(w, `  a, err = radius.NewIFID(value.`, identifier(subAttr.Name), `)`)
-		case dictionary.AttributeInteger64:
-			p(w, `  a = radius.NewInteger64(value.`, identifier(subAttr.Name), `)`)
-		}
-		p(w, `  if err != nil {`)
-		p(w, `	  return nil, err`)
-		p(w, `	}`)
-		p(w, `  typedAttributes = append(typedAttributes, radius.TypedAttribute{`, subType(ident, subAttr.Name), `, a})`)
-	}
-	p(w)
-	p(w, `	attribute, err = radius.NewTLV(typedAttributes)`)
-	p(w, `  if err != nil {`)
-	p(w, `	  return nil, err`)
-	p(w, `	}`)
-	if attr.HasTag() {
-		p(w)
-		p(w, `  a, err = radius.NewTag(tag, a)`)
-		p(w, `	if err != nil {`)
-		p(w, `	  return = nil, err`)
-		p(w, `	}`)
-	}
-	p(w, `return`)
-	p(w, `}`)
-}
-
-func getTLVObject(w io.Writer, attr *dictionary.Attribute) {
-	ident := identifier(attr.Name)
-	isFirst := true
-	p(w)
-	if !attr.HasTag() {
-		p(w, `func set`, ident, `(a radius.Attribute) (values []`, ident, `,err error) {`)
-	} else {
-		p(w, `func set`, ident, `(a radius.Attribute) (tag byte, values []`, ident, `,err error) {`)
-	}
-	p(w, `	var attributes radius.Attributes`)
-	p(w, `  valuesLen := -1`)
-	if attr.HasTag() {
-		p(w)
-		p(w, `  tag, a, err = radius.Tag(a)`)
-		p(w, `	if err != nil {`)
-		p(w, `	  return`)
-		p(w, `	}`)
-	}
-	p(w)
-	p(w, `	attributes, err = radius.TLV(a)`)
-	p(w, `	if err != nil {`)
-	p(w, `		return`)
-	p(w, `	}`)
-	for _, subAttr := range attr.Attributes {
-		p(w)
-		if isFirst {
-			p(w, `  val, ok := attributes[`, subType(ident, subAttr.Name), `];`)
-			p(w, `	if !ok {`)
-			p(w, `    err = radius.ErrTLVAttribute`)
-			p(w, `	  return`)
-			p(w, `	}`)
-			isFirst = false
-			p(w, `  valuesLen = len(val)`)
-			p(w, `  values = make([]`, ident, `, valuesLen)`)
-		} else {
-			p(w, `  val, ok = attributes[`, subType(ident, subAttr.Name), `];`)
-			p(w, `	if !ok {`)
-			p(w, `    err = radius.ErrTLVAttribute`)
-			p(w, `	  return`)
-			p(w, `	}`)
-		}
-		p(w, `  if len(val) != valuesLen {`)
-		p(w, `    err = radius.ErrTLVAttribute`)
-		p(w, `	  return`)
-		p(w, `  }`)
-		p(w, `  for i := range(val) {`)
-		switch subAttr.Type {
-		case dictionary.AttributeString:
-			p(w, `    values[i].`, identifier(subAttr.Name), `= radius.String(val[i])`)
-		case dictionary.AttributeOctets:
-			p(w, `    values[i].`, identifier(subAttr.Name), `= radius.Bytes(val[i])`)
-		case dictionary.AttributeIPAddr:
-			p(w, `    values[i].`, identifier(subAttr.Name), `, err = radius.IPAddr(val[i])`)
-		case dictionary.AttributeDate:
-			p(w, `    values[i].`, identifier(subAttr.Name), `, err = radius.Date(val[i])`)
-		case dictionary.AttributeInteger:
-			p(w, `    values[i].`, identifier(subAttr.Name), `, err = radius.Integer(val[i])`)
-		case dictionary.AttributeIPv6Addr:
-			p(w, `    values[i].`, identifier(subAttr.Name), `, err = radius.IPv6Addr(val[i])`)
-		case dictionary.AttributeIFID:
-			p(w, `    values[i].`, identifier(subAttr.Name), `, err = radius.IFID(val[i])`)
-		case dictionary.AttributeInteger64:
-			p(w, `    values[i].`, identifier(subAttr.Name), `, err = radius.Integer64(val[i])`)
-		}
-		p(w, `  } `)
-	}
-	p(w, `  return`)
-	p(w, `}`)
-}
-
 func (g *Generator) genAttributeTLV(w io.Writer, attr *dictionary.Attribute, allValues []*dictionary.Value, vendor *dictionary.Vendor) {
 	ident := identifier(attr.Name)
 	var vendorIdent string
 	if vendor != nil {
 		vendorIdent = identifier(vendor.Name)
 	}
-
-	p(w)
-	p(w, `type `, ident, ` struct {`)
-	for _, subAttr := range attr.Attributes {
-		typeStr := subAttr.Type.TypeDef()
-		if len(typeStr) > 0 {
-			p(w, identifier(subAttr.Name), ` `, typeStr)
-		}
-	}
-	p(w, `}`)
 
 	if len(attr.Attributes) > 0 {
 		// create const for all the attributes
@@ -1049,87 +917,43 @@ func (g *Generator) genAttributeTLV(w io.Writer, attr *dictionary.Attribute, all
 		p(w, `)`)
 	}
 
-	genNewTLVObject(w, attr)
-	getTLVObject(w, attr)
-
 	p(w)
-	if !attr.HasTag() {
-		p(w, `func `, ident, `_Add(p *radius.Packet, values []`, ident, `) (error) {`)
-	} else {
-		p(w, `func `, ident, `_Add(p *radius.Packet, tag byte, values []`, ident, `) (error) {`)
-	}
-	p(w, `  var attribute radius.Attribute`)
-	p(w, `  if len(values) < 1 {`)
-	p(w, `    return radius.ErrEmptyStruct`)
-	p(w, `  }`)
-	p(w, `  for _, value := range values {`)
-	if !attr.HasTag() {
-		p(w, `    _attr, _err :=  new`, ident, `(value)`)
-	} else {
-		p(w, `    _attr, _err :=  new`, ident, `(tag, value)`)
-	}
-	p(w, ` 	  if _err != nil {`)
-	p(w, `	    return _err`)
-	p(w, `	  }`)
-	p(w, `    attribute = append(attribute, _attr...)`)
-	p(w, `  }`)
-
+	p(w, `func `, ident, `_Add(p *radius.Packet, attrs radius.Attributes) (error) {`)
+	p(w, `	size := attrs.wireSize()`)
+	p(w, `	b := make([]byte, size)`)
+	p(w, `	attrs.encodeTo(b)`)
 	if vendor != nil {
-		p(w, `	return _`, vendorIdent, `_AddVendor(p, `, attr.OID, `, attribute)`)
+		p(w, `	return _`, vendorIdent, `_AddVendor(p, `, attr.OID, `, b)`)
 	} else {
-		p(w, `	p.Add(`, ident, `_Type, attribute)`)
+		p(w, `	p.Add(`, ident, `_Type, b)`)
 		p(w, `	return nil`)
 	}
 	p(w, `}`)
 
 	p(w)
-	if !attr.HasTag() {
-		p(w, `func `, ident, `_Get(p *radius.Packet) (value []`, ident, `) {`)
-		p(w, `	value, _ = `, ident, `_Lookup(p)`)
-	} else {
-		p(w, `func `, ident, `_Get(p *radius.Packet) (tag byte, value []`, ident, `) {`)
-		p(w, `	tag, value, _ = `, ident, `_Lookup(p)`)
-	}
-	p(w, `	return`)
+	p(w, `func `, ident, `_Get(p *radius.Packet) (radius.Attributes) {`)
+	p(w, `	value, _ := `, ident, `_Lookup(p)`)
+	p(w, `	return value`)
 	p(w, `}`)
 
 	p(w)
-	if !attr.HasTag() {
-		p(w, `func `, ident, `_Gets(p *radius.Packet) (values [][]`, ident, `, err error) {`)
-	} else {
-		p(w, `func `, ident, `_Gets(p *radius.Packet) (tags []byte, values [][]`, ident, `, err error) {`)
-	}
-	p(w, `	var value []`, ident)
-	if attr.HasTag() {
-		p(w, `	var tag byte`)
-	}
+	p(w, `func `, ident, `_Gets(p *radius.Packet) (attrs_arr []radius.Attributes, err error) {`)
 	if vendor != nil {
 		p(w, `	for _, attr := range _`, vendorIdent, `_GetsVendor(p, `, attr.OID, `) {`)
 	} else {
 		p(w, `	for _, attr := range p.Attributes[`, ident, `_Type] {`)
 	}
-	if !attr.HasTag() {
-		p(w, `    value, err = set`, ident, `(attr)`)
-	} else {
-		p(w, `    tag, value, err = set`, ident, `(attr)`)
-	}
+	p(w, `    attr, err = ParseAttributes(attr)`)
 	p(w, `    if err != nil {`)
 	p(w, `      return`)
 	p(w, `    }`)
-	p(w, `    values = append(values, []`, ident, `(value))`)
-	if attr.HasTag() {
-		p(w, `    tags = append(tags, tag)`)
-	}
+	p(w, `    attrs_arr = append(attrs_arr, attr)`)
 	p(w, `	}`)
 	p(w, `	return`)
 	p(w, `}`)
 
 	p(w)
-	if !attr.HasTag() {
-		p(w, `func `, ident, `_Lookup(p *radius.Packet) (values []`, ident, `, err error) {`)
-	} else {
-		p(w, `func `, ident, `_Lookup(p *radius.Packet) (tag byte, values []`, ident, `, err error) {`)
-	}
+	p(w, `func `, ident, `_Lookup(p *radius.Packet) (attrs radius.Attributes, err error) {`)
 	if vendor != nil {
 		p(w, `	a, ok  := _`, vendorIdent, `_LookupVendor(p, `, attr.OID, `)`)
 	} else {
@@ -1139,37 +963,41 @@ func (g *Generator) genAttributeTLV(w io.Writer, attr *dictionary.Attribute, all
 	p(w, `		err = radius.ErrNoAttribute`)
 	p(w, `		return`)
 	p(w, `	}`)
-	if !attr.HasTag() {
-		p(w, `  values, err = set`, ident, `(a)`)
-	} else {
-		p(w, `  tag, values, err = set`, ident, `(a)`)
-	}
+	p(w, `  attrs, err = ParseAttributes(a)`)
 	p(w, `	return`)
 	p(w, `}`)
 
 	p(w)
-	if !attr.HasTag() {
-		p(w, `func `, ident, `_Set(p *radius.Packet, values []`, ident, `) (error) {`)
-	} else {
-		p(w, `func `, ident, `_Set(p *radius.Packet, tag byte, value []`, ident, `) (error) {`)
-	}
-	p(w, `  var attribute radius.Attribute`)
-	p(w, `  for _, value := range values {`)
-	if !attr.HasTag() {
-		p(w, `    _attr, _err := new`, ident, `(value)`)
-	} else {
-		p(w, `    _attr, _err := new`, ident, `(tag, value)`)
-	}
-	p(w, ` 	  if _err != nil {`)
-	p(w, `	    return _err`)
-	p(w, `	  }`)
-	p(w, `    attribute = append(attribute, _attr...)`)
-	p(w, `  }`)
+	p(w, `func `, ident, `_Set(p *radius.Packet, values []`, ident, `) (error) {`)
+	p(w, `	size := attrs.wireSize()`)
+	p(w, `	b := make([]byte, size)`)
+	p(w, `	attrs.encodeTo(b)`)
 	if vendor != nil {
-		p(w, `	return _`, vendorIdent, `_SetVendor(p, `, attr.OID, `, attribute)`)
+		p(w, `	return _`, vendorIdent, `_AddVendor(p, `, attr.OID, `, b)`)
 	} else {
-		p(w, `	p.Set(`, ident, `_Type, attribute)`)
+		p(w, `	p.Set(`, ident, `_Type, b)`)
 		p(w, `	return nil`)
 	}
 	p(w, `}`)
+
+	for _, subAttr := range attr.Attributes {
+		switch subAttr.Type {
+		case dictionary.AttributeString, dictionary.AttributeOctets:
+			g.genAttributeStringOctets(w, subAttr, vendor)
+		case dictionary.AttributeIPAddr:
+			g.genAttributeIPAddr(w, subAttr, vendor, net.IPv4len)
+		case dictionary.AttributeIPv6Addr:
+			g.genAttributeIPAddr(w, subAttr, vendor, net.IPv6len)
+		case dictionary.AttributeDate:
+			g.genAttributeDate(w, subAttr, vendor)
+		case dictionary.AttributeIFID:
+			g.genAttributeIFID(w, subAttr, vendor)
+		case dictionary.AttributeInteger:
+			g.genAttributeInteger(w, subAttr, allValues, 32, vendor)
+		case dictionary.AttributeInteger64:
+			g.genAttributeInteger(w, subAttr, allValues, 64, vendor)
+		case dictionary.AttributeTLV:
+			g.genAttributeTLV(w, subAttr, allValues, vendor)
+		}
+	}
 }
